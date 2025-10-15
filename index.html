@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Chat Config Manager (Simple UI)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f9;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #ffffff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+        h2 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; 
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #statusMessage {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            display: none;
+        }
+        .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Live Chat Configuration Manager</h2>
+        <p>Update this form to instantly change the live chat widget on ALL your connected websites. Just change the URL and name, then click 'Save'.</p>
+
+        <form id="chatForm">
+            <input type="hidden" id="binId" value="68f0005d43b1c97be96a264b">
+            <input type="hidden" id="masterKey" value="$2a$10$FrD5SFJEoEnRZIHX3nZn1.JO7JP89tHeP/30FA5t0C7a252iwokcG">
+            
+            <label for="providerName">Provider Name (e.g., tawk, tidio):</label>
+            <input type="text" id="providerName" required>
+            
+            <label for="scriptUrl">Chat Script URL (the s1.src link):</label>
+            <input type="text" id="scriptUrl" required placeholder="https://embed.tawk.to/YOUR_ID/default">
+            
+            <button type="submit">Update All Websites (SAVE)</button>
+        </form>
+
+        <div id="statusMessage"></div>
+
+        <p style="margin-top: 25px; font-size: 0.9em; color: #666;">
+            💡 **ACTION REQUIRED:** Ensure your websites have the **dynamic loader script** using Bin ID `68effa6f80b27952c6e759c1` for this to work.
+        </p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('chatForm');
+            const statusMessage = document.getElementById('statusMessage');
+
+            // --- READ (Load) the current data from JSONBin ---
+            function loadCurrentSettings() {
+                const binId = document.getElementById('binId').value;
+                const masterKey = document.getElementById('masterKey').value;
+                // Using /latest to read the most recent version
+                const url = `https://api.jsonbin.io/v3/b/${binId}/latest`; 
+
+                fetch(url, {
+                    method: 'GET',
+                    headers: {
+                        'X-Master-Key': masterKey // Key is often needed even for reading private bins
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.record && data.record.activeChat) {
+                        document.getElementById('providerName').value = data.record.activeChat.provider;
+                        document.getElementById('scriptUrl').value = data.record.activeChat.script_url;
+                        showMessage('Current settings loaded successfully.', 'success');
+                    } else {
+                        // Set Tawk.to as the initial default if the bin is empty
+                        document.getElementById('providerName').value = 'tawk';
+                        document.getElementById('scriptUrl').value = 'https://embed.tawk.to/68eff9c3cf0e41195453b0c3/1j7kmf9as';
+                        showMessage('JSONBin loaded, using initial Tawk.to settings. Click SAVE to push them.', 'success');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error reading JSONBin:', error);
+                    showMessage('Could not read settings. Check your console for details.', 'error');
+                });
+            }
+
+            // --- UPDATE (Save) the new data to JSONBin ---
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const binId = document.getElementById('binId').value;
+                const masterKey = document.getElementById('masterKey').value;
+                const providerName = document.getElementById('providerName').value;
+                const scriptUrl = document.getElementById('scriptUrl').value;
+                const url = `https://api.jsonbin.io/v3/b/${binId}`;
+                
+                // The JSON structure that the websites are designed to read
+                const newSettings = {
+                    activeChat: {
+                        provider: providerName,
+                        script_url: scriptUrl
+                    }
+                };
+
+                fetch(url, {
+                    method: 'PUT', // PUT is used to update the entire bin
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': masterKey 
+                    },
+                    body: JSON.stringify(newSettings)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.record) {
+                        showMessage(`SUCCESS! Chat switched to **${providerName}**. All websites updated.`, 'success');
+                        loadCurrentSettings(); // Read again to confirm save
+                    } else {
+                        showMessage(`ERROR: Update failed. Check API key/ID.`, 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error updating JSONBin:', error);
+                    showMessage('FATAL ERROR: Could not connect to JSONBin. Check network.', 'error');
+                });
+            });
+
+            // Helper function to display messages
+            function showMessage(message, type) {
+                statusMessage.innerHTML = message;
+                statusMessage.className = ''; 
+                statusMessage.classList.add(type);
+                statusMessage.style.display = 'block';
+            }
+
+            // Load settings when the page is first opened
+            loadCurrentSettings();
+        });
+    </script>
+</body>
+</html>
